@@ -1,3 +1,5 @@
+*.s
+.dep
 # Object files
 *.o
 *.ko
