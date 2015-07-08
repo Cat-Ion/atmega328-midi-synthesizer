@@ -1,4 +1,9 @@
 *.s
+*.eep
+*.lss
+*.lst
+*.map
+*.sym
 .dep
 # Object files
 *.o
