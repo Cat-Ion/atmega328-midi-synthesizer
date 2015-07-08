@@ -24,7 +24,7 @@ PhaseType increments[12];
 uint8_t enabled_tones[128/8];
 uint8_t tone[N_OSC];
 uint8_t age[N_OSC];
-uint8_t vel[N_OSC];
+uint8_t vel[N_OSC], vel_bak[N_OSC];
 uint8_t num_tones = 0;
 
 static uint8_t next_char(void);
@@ -52,10 +52,10 @@ void tx_s(char const *s) {
 ISR(TIMER2_OVF_vect) {
     PORTD |= (1<<2);
 #if N_OSC >= 1
-    phase[0].i += increment[0]; OCR2A = (vel[0] * wav[phase[0].b[sizeof(PhaseType)-1]]) >> 8;
+    phase[0].i += increment[0]; if(SREG & 1) { vel_bak[0] = vel[0]; } OCR2A = (vel_bak[0] * wav[phase[0].b[sizeof(PhaseType)-1]]) >> 8;
 #endif
 #if N_OSC >= 2
-    phase[1].i += increment[1]; OCR2B = (vel[0] * wav[phase[1].b[sizeof(PhaseType)-1]]) >> 8;
+    phase[1].i += increment[1]; if(SREG & 1) { vel_bak[1] = vel[1]; } OCR2B = (vel_bak[1] * wav[phase[1].b[sizeof(PhaseType)-1]]) >> 8;
 #endif
 #if N_OSC >= 3
     phase[2].i += increment[2]; OCR1B = wav[phase[2].b[sizeof(PhaseType)-1]];
@@ -253,7 +253,7 @@ int main(void) {
         increments[i] = (1UL<<(sizeof(PhaseType)*8-1)) / (F_OSC * 0.5 / 256.) * 4186.0*4 * pow(2., i/12.) * 440./437.;
     }
 
-    for(i = 0; i < N_OSC; i++) { tone[i] = age[i] = 255; }
+    for(i = 0; i < N_OSC; i++) { tone[i] = age[i] = vel_bak[i] = 255; }
     for(i = 0; i < 128/8; i++) { enabled_tones[i] = 0; }
     // Double clock
     UCSR0A = (1<<U2X0);
