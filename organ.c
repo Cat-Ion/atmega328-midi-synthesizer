@@ -1,12 +1,16 @@
+#ifndef F_CPU
+#define F_CPU F_OSC
+#endif
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <ctype.h>
 #include <math.h>
 #include <stdint.h>
+#include <util/delay.h>
 
-#define N_OSC 4
+#define N_OSC 1
 #define N_SAMP 256
-#define HIGHEST_OCTAVE 7
+#define HIGHEST_OCTAVE 10
 
 typedef uint16_t PhaseType;
 
@@ -20,39 +24,61 @@ PhaseType increments[12];
 uint8_t enabled_tones[128/8];
 uint8_t tone[N_OSC];
 uint8_t age[N_OSC];
+uint8_t vel[N_OSC];
 uint8_t num_tones = 0;
 
 static uint8_t next_char(void);
 static void handle_midi(void);
 int main(void);
 
+void tx(uint8_t c) {
+    while( !(UCSR0A & (1<<UDRE0)));
+    UDR0 = c;
+}
 
-ISR(TIMER0_OVF_vect) {
+void tx_hex(uint8_t c) {
+    static char const lut[16] = "0123456789ABCDEF";
+    tx(lut[c>>4]);
+    tx(lut[c&15]);
+}
+
+void tx_s(char const *s) {
+    while(*s) {
+        tx(*s);
+        s++;
+    }
+}
+
+ISR(TIMER2_OVF_vect) {
     PORTD |= (1<<2);
 #if N_OSC >= 1
-    phase[0].i += increment[0]; OCR0A = wav[phase[0].b[sizeof(PhaseType)-1]];
+    phase[0].i += increment[0]; OCR2A = (vel[0] * wav[phase[0].b[sizeof(PhaseType)-1]]) >> 8;
 #endif
 #if N_OSC >= 2
-    phase[1].i += increment[1]; OCR0B = wav[phase[1].b[sizeof(PhaseType)-1]];
+    phase[1].i += increment[1]; OCR2B = (vel[0] * wav[phase[1].b[sizeof(PhaseType)-1]]) >> 8;
 #endif
 #if N_OSC >= 3
-    phase[2].i += increment[2]; OCR1A = wav[phase[2].b[sizeof(PhaseType)-1]];
+    phase[2].i += increment[2]; OCR1B = wav[phase[2].b[sizeof(PhaseType)-1]];
 #endif
 #if N_OSC >= 4
-    phase[3].i += increment[3]; OCR1B = wav[phase[3].b[sizeof(PhaseType)-1]];
+    phase[3].i += increment[3]; OCR1A = wav[phase[3].b[sizeof(PhaseType)-1]];
 #endif
 #if N_OSC >= 5
-    phase[4].i += increment[4]; OCR2A = wav[phase[4].b[sizeof(PhaseType)-1]];
+    phase[4].i += increment[4]; OCR0B = wav[phase[4].b[sizeof(PhaseType)-1]];
 #endif
 #if N_OSC >= 6
-    phase[5].i += increment[5]; OCR2B = wav[phase[5].b[sizeof(PhaseType)-1]];
+    phase[5].i += increment[5]; OCR0A = wav[phase[5].b[sizeof(PhaseType)-1]];
 #endif
     PORTD &= ~(1<<2);
 }
 static void set_tone(uint8_t oscillator, uint8_t key, uint8_t velocity) {
-    increment[oscillator] = increments[key%12] >> (HIGHEST_OCTAVE-key/12);
+    if(tone[oscillator] != 255) {
+        enabled_tones[tone[oscillator] >> 3] &= ~(1 << (tone[oscillator] & 0x07));
+    }
+    increment[oscillator] = increments[key%12] >> (HIGHEST_OCTAVE+1-key/12);
     tone[oscillator] = key;
     age[oscillator] = 0;
+    vel[oscillator] = 128 + ((velocity / 2) + (velocity & 1));
     enabled_tones[key >> 3] |= (1 << (key & 0x07));
 }
 
@@ -60,11 +86,23 @@ __attribute__((optimize("unroll-loops")))
 static void start_tone(uint8_t key, uint8_t velocity) {
     uint8_t i;
     if(enabled_tones[key >> 3] & (1 << (key & 0x07))) {
+        for(i = N_OSC; i--; ) {
+            if(tone[i] == key) {
+                tx('a');
+                tx('0' + i);
+                tx('\n');
+                set_tone(i, key, velocity);
+                break;
+            }
+        }
         return;
     }
     if(num_tones < N_OSC) {
         for(i = N_OSC; i--; ) {
             if(age[i] == 255) {
+                tx('a');
+                tx('0' + i);
+                tx('\n');
                 set_tone(i, key, velocity);
                 num_tones++;
                 break;
@@ -73,7 +111,8 @@ static void start_tone(uint8_t key, uint8_t velocity) {
             }
         }
         while(i--) {
-            age[i]++;
+            if(age[i] != 255)
+                age[i]++;
         }
     } else {
         uint8_t max_i = N_OSC-1, max_age = age[N_OSC-1];
@@ -85,15 +124,21 @@ static void start_tone(uint8_t key, uint8_t velocity) {
             }
             age[i]++;
         }
+        tx('a');
+        tx('0' + max_i);
+        tx('\n');
         set_tone(max_i, key, velocity);
     }
 }
 __attribute__((optimize("unroll-loops")))
 static void stop_tone(uint8_t key, uint8_t velocity) {
     uint8_t i;
-    enabled_tones[key >> 3] &= ~(1 << (key & 0x07));
     for(i = N_OSC; i--; ) {
         if(tone[i] == key) {
+            tx('o');
+            tx('0' + i);
+            tx('\n');
+            enabled_tones[key >> 3] &= ~(1 << (key & 0x07));
             tone[i] = 255;
             age[i] = 255;
             increment[i] = 0;
@@ -128,54 +173,71 @@ static void handle_midi(void) {
     case 0:
         p1 = next_char();
         p2 = next_char();
+        tx_hex(0x80 | (command << 4));
+        tx_hex(p1);
+        tx_hex(p2);
+        tx('\n');
         stop_tone(p1, p2);
         break;
     case 1:
         p1 = next_char();
         p2 = next_char();
+        tx_hex(0x80 | (command << 4));
+        tx_hex(p1);
+        tx_hex(p2);
+        tx(' ');
         start_tone(p1, p2);
+        break;
+    default:
+        tx_hex(0x80 | (command << 4));
+        tx_hex(0);
+        tx_hex(0);
+        tx(' ');
+        tx_s("  \n");
+        break;
     }
 }
 int main(void) {
+    DDRD = (1<<2);
 #if N_OSC >= 1
-    DDRD |= (1<<6); // OC0A
-    TCCR0A |= (2<<COM0A0);
-    TCCR0A |= (3<<WGM00);
+    DDRD |= (1<<3); // OC2B
+    TCCR2A |= (2<<COM2A0);
+    TCCR2A |= (3<<WGM20);
 #endif
 #if N_OSC >= 2
-    DDRD |= (1<<5); // OC0B
-    TCCR0A |= (2<<COM0B0);
+    DDRB |= (1<<3); // OC2A
+    TCCR2A |= (2<<COM2B0);
 #endif
 #if N_OSC >= 3
-    DDRB |= (1<<1); // OC1A
-    TCCR1A |= (2 << COM1A0);
+    DDRB |= (1<<2); // OC1B
+    TCCR1A |= (2 << COM1B0);
     TCCR1A |= (1 << WGM10);
     TCCR1B |= (1 << WGM12);
 #endif
 #if N_OSC >= 4
-    DDRB |= (1<<2); // OC1B
-    TCCR1A |= (2 << COM1B0);
+    DDRB |= (1<<1); // OC1A
+    TCCR1A |= (2 << COM1A0);
 #endif
 #if N_OSC >= 5
-    DDRB |= (1<<3); // OC2A
-    TCCR2A |= (2 << COM2A0);
-    TCCR2A |= (3 << WGM20);
+    DDRD |= (1<<5); // OC0B
+    TCCR0A |= (2 << COM0B0);
+    TCCR0A |= (3 << WGM00);
 #endif
 #if N_OSC >= 6
-    DDRD |= (1<<3); // OC2B
-    TCCR2A |= (2 << COM2B0);
+    DDRD |= (1<<6); // OC0A
+    TCCR0A |= (2 << COM0A0);
 #endif
     DDRB = (1<<3);
 
 #if N_OSC >= 1
-    TCCR0B |= (1 << CS00);
-    TIMSK0 |= (1 << TOIE0);
+    TCCR2B |= (1 << CS20);
+    TIMSK2 |= (1 << TOIE2);
 #endif
 #if N_OSC >= 3
     TCCR1B |= (1 << CS10);
 #endif
 #if N_OSC >= 5
-    TCCR2B |= (1 << CS20);
+    TCCR0B |= (1 << CS00);
 #endif
     
     uint8_t i = 0;
@@ -186,9 +248,9 @@ int main(void) {
 
     for(i = 0; i < 12; i++) {
         // Period length divided by the interrupt frequency, times the
-        // base frequency (starts at C7 = 2093 Hz). Period length
+        // base frequency (starts at C10 = 4186*4 Hz). Period length
         // overflows, so divide it and the interrupt frequency by 2.
-        increments[i] = (1UL<<31) / (F_OSC * 0.5 / 256.) * 2093. * pow(2., i/12.);
+        increments[i] = (1UL<<(sizeof(PhaseType)*8-1)) / (F_OSC * 0.5 / 256.) * 4186.0*4 * pow(2., i/12.) * 440./437.;
     }
 
     for(i = 0; i < N_OSC; i++) { tone[i] = age[i] = 255; }
@@ -199,10 +261,14 @@ int main(void) {
     UCSR0B = (1<<RXEN0) | (1<<TXEN0);
     // Set char size to 8 bits
     UCSR0C = (3<<UCSZ00);
-    // Set baud rate to 115.2k
-    UBRR0 = 8;
+    // Set baud rate to 38.4k
+    UBRR0 = 51;
 
     sei();
+    i = UDR0;
+    i = UDR0;
+    i = UDR0;
+    tx_s("Ready\n");
     
     while(1) {
         handle_midi();
