@@ -30,6 +30,14 @@ static void start_tone(uint8_t key, uint8_t velocity);
 static void stop_tone(uint8_t key, uint8_t velocity);
 
 ISR(TIMER2_OVF_vect) {
+    // 37 cycles for register saving/restoring and the PORTD stuff.
+    // That leaves 219 cycles for the oscillator handling, or 36.5
+    // cycles per oscillator if running all six. This is less than
+    // they need in the worst case, but more than in the best case.
+    //
+    // When running all six oscillators, it might be a good idea to
+    // reduce the interrupt frequency by doubling the timer
+    // prescalers, or to disable volume transitions.
     PORTD |= (1<<2);
     if(N_OSC > 0) do_osc(0, &OCR2A);
     if(N_OSC > 1) do_osc(1, &OCR2B);
@@ -42,7 +50,24 @@ ISR(TIMER2_OVF_vect) {
 
 __attribute__((always_inline))
 static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
-    __asm__ volatile (// Increment phase[n] by increment[n]
+    // With transitions enabled:
+    // 
+    // Worst case: 42 cycles (decreased volume, and a new phase)
+    // Best case:  31 cycles (no new phase)
+    //
+    // Usually there's no new phase, so most of the time one
+    // oscillator should take 31 cycles.
+    //
+    // No transitions, but waiting for a new phase:
+    //
+    // Worst case: 34 cycles
+    // Best case: 31 cycles
+    //
+    // Without any 'smart' volume handling, it'll always need 29
+    // cycles.
+    __asm__ volatile (// The following section needs 14 cycles.
+                      // 
+                      // Increment phase[n] by increment[n]
                       // Load phase into r0:r1
                       "lds r0, phase+%[n]\n\t"
                       "lds r1, phase+%[n]+1\n\t"
@@ -60,6 +85,10 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
                       "sts phase+%[n]+1, r30\n\t"
 
 #if VOLUME_TRANSITION == 1
+                      // No overflow: 4 cycles
+                      // Unchanged volume: 8 cycles
+                      // Inc'd volume:    12 cycles
+                      // Dec'd volume:    13 cycles
                       "lds r22, vel_bak+%[n]\n\t"
                       // skip the next if if carry is not set,
                       // i.e. we're not near a zeroed phase yet
@@ -79,6 +108,8 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
                       "      sts vel_bak+%[n], r22 \n\t"
                       "eq%=: \n\t"
 #elif VOLUME_WAIT_NEW_PHASE == 1
+                      // No overflow: 4 cycles
+                      // Overflow:    7 cycles
                       "lds r22, vel_bak+%[n]\n\t"
                       // see above
                       "brcc skip%=\n\t"
@@ -87,9 +118,11 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
                       "sts vel_bak+%[n], r22\n\t"
                       "skip%=:\n\t"
 #else
+                      // 2 cycles
                       "lds r22, vel+%[n]\n\t"
 #endif
-                      
+                      // 13 cycles
+                      // 
                       // Add the offset of the wav table to the high
                       // byte of the phase, which is now in the low
                       // byte of Z, r30.
