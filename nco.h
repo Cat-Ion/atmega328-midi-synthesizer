@@ -50,16 +50,16 @@ __attribute__((always_inline))
 static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
     // With transitions enabled:
     // 
-    // Worst case: 42 cycles (decreased volume, and a new phase)
-    // Best case:  31 cycles (no new phase)
+    // Worst case: 40 cycles (decreased volume, and a new phase)
+    // Best case:  29 cycles (no new phase)
     //
     // Usually there's no new phase, so most of the time one
     // oscillator should take 31 cycles.
     //
     // No transitions, but waiting for a new phase:
     //
-    // Worst case: 34 cycles
-    // Best case: 31 cycles
+    // Worst case: 32 cycles
+    // Best case: 29 cycles
     //
     // Without any 'smart' volume handling, it'll always need 29
     // cycles.
@@ -119,7 +119,7 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
                       // 2 cycles
                       "lds r22, vel+%[n]\n\t"
 #endif
-                      // 13 cycles
+                      // 11 cycles
                       // 
                       // Add the offset of the wav table to the high
                       // byte of the phase, which is now in the low
