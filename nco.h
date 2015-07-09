@@ -43,53 +43,82 @@ ISR(TIMER2_OVF_vect) {
 __attribute__((always_inline))
 static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
     __asm__ volatile (// Increment phase[n] by increment[n]
-                      "lds r20, phase+%[n]\n\t"
-                      "lds r19, phase+%[n]+1\n\t"
+                      // Load phase into r0:r1
+                      "lds r0, phase+%[n]\n\t"
+                      "lds r1, phase+%[n]+1\n\t"
+                      // Load increment into r31:r30, note the
+                      // reversed order of high/low byte. This is so
+                      // we get the high byte into the low byte of Z
+                      // for later.
                       "lds r31, increment+%[n]\n\t"
                       "lds r30, increment+%[n]+1\n\t"
-                      "add r31, r20\n\t"
-                      "adc r30, r19\n\t"
+                      // Add them into r0:r1
+                      "add r30, r1\n\t"
+                      "adc r31, r0\n\t"
+                      // Save them back into phase[n]
                       "sts phase+%[n], r31\n\t"
                       "sts phase+%[n]+1, r30\n\t"
+
 #if VOLUME_TRANSITION == 1
                       // skip the next if if carry is not set,
                       // i.e. we're not near a zeroed phase yet
-                      // using this instead of if(SREG&1) { ... }
-                      // saves us /two/ whole cycles per channel
-                      // and interrupt call!
-                      "brcc assign%=\n\t"
-                      "      lds r20, vel_bak+%[n] \n\t"
-                      "      lds r31, vel+%[n] \n\t"
-                      "      cp r20, r31 \n\t"
+                      "brcc eq%=\n\t"
+                      // Compare vel_bak[n] and vel[n]
+                      "      lds r22, vel_bak+%[n] \n\t"
+                      "      lds r23, vel+%[n] \n\t"
+                      "      cp r22, r23 \n\t"
+                      // Skip if equal
                       "      breq eq%= \n\t"
                       "ne%=: brlo lt%= \n\t"
-                      "gt%=: dec r20 \n\t"
-                      "      sts vel_bak+%[n], r20\n\t"
+                      // vel_bak[n] > vel[n], decrement
+                      "gt%=: dec r22 \n\t"
+                      "      sts vel_bak+%[n], r22\n\t"
                       "      rjmp eq%= \n\t"
-                      "lt%=: inc r20 \n\t"
-                      "      sts vel_bak+%[n], r20 \n\t"
+                      // vel_bak[n] < vel[n], increment
+                      "lt%=: inc r22 \n\t"
+                      "      sts vel_bak+%[n], r22 \n\t"
                       "eq%=: \n\t"
 #elif VOLUME_WAIT_NEW_PHASE == 1
-                      "brcc assign%=\n\t" // see above
-                      "lds r20, vel+%[n]\n\t"
-                      "sts vel_bak+%[n]\n\t, r20"
+                      // see above
+                      "brcc skip%=\n\t"
+                      // Load vel into vel_bak
+                      "lds r22, vel+%[n]\n\t"
+                      "sts vel_bak+%[n], r22\n\t"
+                      "skip:\n\t"
 #else
-                      "lds r20, vel+%[n]\n\t"
+                      "lds r22, vel+%[n]\n\t"
 #endif
-                      "assign%=:\n\t"
+                      
+                      // Add the offset of the wav table to the high
+                      // byte of the phase, which is now in the low
+                      // byte of Z, r30.
+                      //
+                      // First overwrite r31 with the new high byte of
+                      // the address.
                       "ldi r31, hi8(wav)\n\t"
+                      // Then add the low byte
                       "subi r30, lo8(-(wav))\n\t"
-                      "sbci r31, 0\n\t" // r30 = wav + phase[n].b[sizeof(PhaseType)-1]
-                      "ld r19, Z\n\t"      // r19 = (r30)
-                      "mulsu r19, r20\n\t" // r19 = (r30) * vel_bak[n] (or vel[n])
-                      "ldi r19, -128\n\t"
-                      "eor r1, r19\n\t"    // bias by 128 to change signed to unsigned
-                      "sts %[pwm], r1"     // write PWM value
+                      // Add carry
+                      "sbci r31, 0\n\t"
+                      // Load wav[phase[n].b[1]] into r23
+                      "ld r23, Z\n\t"
+
+                      // Signed/unsigned multiply into r0:r1. This
+                      // multiplies the wave form with the volume.
+                      "mulsu r23, r22\n\t"
+                      // The result is signed, so flip the high bit to
+                      // add 128 to the high byte (r1, the only one we
+                      // need) and bias it to a signed value.
+                      "ldi r30, -128\n\t"
+                      "eor r1, r30\n\t"
+                      // Finally, write the PWM register
+                      "sts %[pwm], r1"
                       :
                       : [n] "I" (n),
                         [pwm] "i" (reg),
-                        [sizem] "I" (sizeof(PhaseType)-1)
-                      : "r0", "r1", "r19", "r20", "r30", "r31" );
+                        [sizem] "I" (sizeof(PhaseType)-1),
+                        [sreg] "I" (_SFR_IO_ADDR(SREG))
+                      : "r0", "r1", "r22", "r23", "r30", "r31" );
 }
 
 static void nco_init(void) {
