@@ -26,7 +26,10 @@ PhaseType increments[12];
 uint8_t enabled_tones[128/8];
 uint8_t tone[N_OSC];
 uint8_t age[N_OSC];
-uint8_t vel[N_OSC], vel_bak[N_OSC];
+uint8_t vel[N_OSC];
+#if VOLUME_TRANSITION || VOLUME_WAIT_NEW_PHASE
+uint8_t vel_bak[N_OSC];
+#endif
 uint8_t num_tones = 0;
 
 static uint8_t next_char(void);
@@ -55,7 +58,8 @@ __attribute__((always_inline))
 static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
         phase[n].i += increment[n];
         // skip the next if if carry is not set, i.e. we're not near a zeroed phase yet
-        __asm__ volatile goto ("brcc %I0 \n" : /* No outputs */ : /* No inputs */ : /* No clobbers */ : assign);
+        // using this instead of if(SREG&1) { ... } saves us /two/ whole cycles per channel and interrupt call!
+         __asm__ volatile goto ("brcc %I0 \n" : /* No outputs */ : /* No inputs */ : /* No clobbers */ : assign);
         if(VOLUME_TRANSITION && vel_bak[n] < vel[n]) {
                 vel_bak[n]++;
         } else if(VOLUME_TRANSITION && vel_bak[n] > vel[n]) {
@@ -64,7 +68,11 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
                 vel_bak[n] = vel[n];
         }
 assign:
-        *reg = 0x80 ^ ((vel_bak[n] * wav[phase[n].b[sizeof(PhaseType)-1]]) >> 8);\
+        if(VOLUME_TRANSITION || VOLUME_WAIT_NEW_PHASE) {
+                *reg = 0x80 ^ ((vel_bak[n] * wav[phase[n].b[sizeof(PhaseType)-1]]) >> 8);
+        } else {
+                *reg = 0x80 ^ ((vel[n] * wav[phase[n].b[sizeof(PhaseType)-1]]) >> 8);
+        }
 }
 ISR(TIMER2_OVF_vect) {
     PORTD |= (1<<2);
