@@ -51,24 +51,23 @@ void tx_s(char const *s) {
 
 ISR(TIMER2_OVF_vect) {
     PORTD |= (1<<2);
-#if N_OSC >= 1
-    phase[0].i += increment[0]; if(SREG & 1) { vel_bak[0] = vel[0]; } OCR2A = (vel_bak[0] * wav[phase[0].b[sizeof(PhaseType)-1]]) >> 8;
-#endif
-#if N_OSC >= 2
-    phase[1].i += increment[1]; if(SREG & 1) { vel_bak[1] = vel[1]; } OCR2B = (vel_bak[1] * wav[phase[1].b[sizeof(PhaseType)-1]]) >> 8;
-#endif
-#if N_OSC >= 3
-    phase[2].i += increment[2]; OCR1B = wav[phase[2].b[sizeof(PhaseType)-1]];
-#endif
-#if N_OSC >= 4
-    phase[3].i += increment[3]; OCR1A = wav[phase[3].b[sizeof(PhaseType)-1]];
-#endif
-#if N_OSC >= 5
-    phase[4].i += increment[4]; OCR0B = wav[phase[4].b[sizeof(PhaseType)-1]];
-#endif
-#if N_OSC >= 6
-    phase[5].i += increment[5]; OCR0A = wav[phase[5].b[sizeof(PhaseType)-1]];
-#endif
+#define DO_OSC(n, reg) do { if(N_OSC > n) {\
+        phase[n].i += increment[n];\
+        if(SREG & 1) {\
+                if(vel_bak[n] < vel[n]) {\
+                        vel_bak[n]++;\
+                } else if(vel_bak[n] > vel[n]) {\
+                        vel_bak[n]--;\
+                }\
+        }\
+        reg = (vel_bak[n] * wav[phase[n].b[sizeof(PhaseType)-1]]) >> 8;\
+} } while(0)
+    DO_OSC(0, OCR2A);
+    DO_OSC(1, OCR2B);
+    DO_OSC(2, OCR1B);
+    DO_OSC(3, OCR1A);
+    DO_OSC(4, OCR0B);
+    DO_OSC(5, OCR0B);
     PORTD &= ~(1<<2);
 }
 static void set_tone(uint8_t oscillator, uint8_t key, uint8_t velocity) {
@@ -141,11 +140,12 @@ static void stop_tone(uint8_t key, uint8_t velocity) {
             enabled_tones[key >> 3] &= ~(1 << (key & 0x07));
             tone[i] = 255;
             age[i] = 255;
-            increment[i] = 0;
+            vel[i] = 0;
             num_tones--;
             return;
         }
     }
+    tx_s("    ");
 }
 static uint8_t next_char(void) {
     while(!(UCSR0A & (1<<RXC0)));
@@ -176,7 +176,7 @@ static void handle_midi(void) {
         tx_hex(0x80 | (command << 4));
         tx_hex(p1);
         tx_hex(p2);
-        tx('\n');
+        tx(' ');
         stop_tone(p1, p2);
         break;
     case 1:
