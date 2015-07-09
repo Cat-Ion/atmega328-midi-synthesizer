@@ -60,11 +60,11 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
                       "sts phase+%[n]+1, r30\n\t"
 
 #if VOLUME_TRANSITION == 1
+                      "lds r22, vel_bak+%[n]\n\t"
                       // skip the next if if carry is not set,
                       // i.e. we're not near a zeroed phase yet
                       "brcc eq%=\n\t"
                       // Compare vel_bak[n] and vel[n]
-                      "      lds r22, vel_bak+%[n] \n\t"
                       "      lds r23, vel+%[n] \n\t"
                       "      cp r22, r23 \n\t"
                       // Skip if equal
@@ -79,6 +79,7 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
                       "      sts vel_bak+%[n], r22 \n\t"
                       "eq%=: \n\t"
 #elif VOLUME_WAIT_NEW_PHASE == 1
+                      "lds r22, vel_bak+%[n]\n\t"
                       // see above
                       "brcc skip%=\n\t"
                       // Load vel into vel_bak
