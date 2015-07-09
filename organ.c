@@ -11,10 +11,11 @@
 #define N_OSC 1
 #define N_SAMP 256
 #define HIGHEST_OCTAVE 10
+#define VOLUME_TRANSITION 1
 
 typedef uint16_t PhaseType;
 
-uint8_t wav[N_SAMP];
+int8_t wav[N_SAMP];
 PhaseType increment[N_OSC];
 union {
     PhaseType i;
@@ -54,13 +55,15 @@ ISR(TIMER2_OVF_vect) {
 #define DO_OSC(n, reg) do { if(N_OSC > n) {\
         phase[n].i += increment[n];\
         if(SREG & 1) {\
-                if(vel_bak[n] < vel[n]) {\
+                if(VOLUME_TRANSITION && vel_bak[n] < vel[n]) {\
                         vel_bak[n]++;\
-                } else if(vel_bak[n] > vel[n]) {\
+                } else if(VOLUME_TRANSITION && vel_bak[n] > vel[n]) {\
                         vel_bak[n]--;\
+                } else {\
+                        vel_bak[n] = vel[n];\
                 }\
         }\
-        reg = (vel_bak[n] * wav[phase[n].b[sizeof(PhaseType)-1]]) >> 8;\
+        reg = 0x80 ^ ((vel_bak[n] * wav[phase[n].b[sizeof(PhaseType)-1]]) >> 8);\
 } } while(0)
     DO_OSC(0, OCR2A);
     DO_OSC(1, OCR2B);
@@ -242,7 +245,7 @@ int main(void) {
     
     uint8_t i = 0;
     do {
-        wav[i] = 0.5 + 127.5 * (1 + sin(2 * 3.14159 * i / N_SAMP));
+        wav[i] = 0.5 + 127 * (sin(2 * 3.14159 * i / N_SAMP));
         i++;
     } while(i != 0);
 
