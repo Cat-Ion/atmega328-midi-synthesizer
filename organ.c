@@ -202,46 +202,44 @@ static void handle_midi(void) {
 }
 int main(void) {
     DDRD = (1<<2);
-#if N_OSC >= 1
-    DDRD |= (1<<3); // OC2B
-    TCCR2A |= (2<<COM2A0);
-    TCCR2A |= (3<<WGM20);
-#endif
-#if N_OSC >= 2
-    DDRB |= (1<<3); // OC2A
-    TCCR2A |= (2<<COM2B0);
-#endif
-#if N_OSC >= 3
-    DDRB |= (1<<2); // OC1B
-    TCCR1A |= (2 << COM1B0);
-    TCCR1A |= (1 << WGM10);
-    TCCR1B |= (1 << WGM12);
-#endif
-#if N_OSC >= 4
-    DDRB |= (1<<1); // OC1A
-    TCCR1A |= (2 << COM1A0);
-#endif
-#if N_OSC >= 5
-    DDRD |= (1<<5); // OC0B
-    TCCR0A |= (2 << COM0B0);
-    TCCR0A |= (3 << WGM00);
-#endif
-#if N_OSC >= 6
-    DDRD |= (1<<6); // OC0A
-    TCCR0A |= (2 << COM0A0);
-#endif
+    switch(N_OSC) {
+    case 6:
+        DDRD |= (1<<6); // OC0A
+        TCCR0A |= (2 << COM0A0);
+    case 5:
+        DDRD |= (1<<5); // OC0B
+        TCCR0A |= (2 << COM0B0);
+        TCCR0A |= (3 << WGM00);
+    case 4:
+        DDRB |= (1<<1); // OC1A
+        TCCR1A |= (2 << COM1A0);
+    case 3:
+        DDRB |= (1<<2); // OC1B
+        TCCR1A |= (2 << COM1B0);
+        TCCR1A |= (1 << WGM10);
+        TCCR1B |= (1 << WGM12);
+    case 2:
+        DDRB |= (1<<3); // OC2A
+        TCCR2A |= (2<<COM2B0);
+    case 1:
+        DDRD |= (1<<3); // OC2B
+        TCCR2A |= (2<<COM2A0);
+        TCCR2A |= (3<<WGM20);
+    default:
+        break;
+    }
     DDRB = (1<<3);
 
-#if N_OSC >= 1
-    TCCR2B |= (1 << CS20);
-    TIMSK2 |= (1 << TOIE2);
-#endif
-#if N_OSC >= 3
-    TCCR1B |= (1 << CS10);
-#endif
-#if N_OSC >= 5
-    TCCR0B |= (1 << CS00);
-#endif
+    if(N_OSC >= 1) {
+        TCCR2B |= (1 << CS20);
+        TIMSK2 |= (1 << TOIE2);
+    }
+    if(N_OSC >= 3) {
+        TCCR1B |= (1 << CS10);
+    }
+    if(N_OSC >= 5) {
+        TCCR0B |= (1 << CS00);
+    }
     
     uint8_t i = 0;
     do {
