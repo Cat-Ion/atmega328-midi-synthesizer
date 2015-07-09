@@ -84,7 +84,7 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
                       // Load vel into vel_bak
                       "lds r22, vel+%[n]\n\t"
                       "sts vel_bak+%[n], r22\n\t"
-                      "skip:\n\t"
+                      "skip%=:\n\t"
 #else
                       "lds r22, vel+%[n]\n\t"
 #endif
