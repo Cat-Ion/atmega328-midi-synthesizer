@@ -37,36 +37,22 @@ static void handle_midi(void) {
     case 0:
         p1 = rx();
         p2 = rx();
-        tx_hex(0x80 | (command << 4));
-        tx_hex(p1);
-        tx_hex(p2);
-        tx(' ');
         stop_tone(p1, p2);
         break;
     case 1:
         p1 = rx();
         p2 = rx();
-        tx_hex(0x80 | (command << 4));
-        tx_hex(p1);
-        tx_hex(p2);
-        tx(' ');
         start_tone(p1, p2);
         break;
     default:
-        tx_hex(0x80 | (command << 4));
-        tx_hex(0);
-        tx_hex(0);
-        tx(' ');
-        tx_s("  \n");
         break;
     }
 }
 int main(void) {
-    nco_init();
     uart_init(38400);
+    nco_init();
     sei();
-    tx_s("Ready\n");
-    
+    uint8_t i = 0;
     while(1) {
         handle_midi();
     }

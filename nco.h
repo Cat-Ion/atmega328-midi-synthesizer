@@ -38,14 +38,12 @@ ISR(TIMER2_OVF_vect) {
     // When running all six oscillators, it might be a good idea to
     // reduce the interrupt frequency by doubling the timer
     // prescalers, or to disable volume transitions.
-    PORTD |= (1<<2);
     if(N_OSC > 0) do_osc(0, &OCR2A);
     if(N_OSC > 1) do_osc(1, &OCR2B);
     if(N_OSC > 2) do_osc(2, &OCR1BL);
     if(N_OSC > 3) do_osc(3, &OCR1AL);
     if(N_OSC > 4) do_osc(4, &OCR0B);
     if(N_OSC > 5) do_osc(5, &OCR0B);
-    PORTD &= ~(1<<2);
 }
 
 __attribute__((always_inline))
@@ -69,20 +67,20 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
                       // 
                       // Increment phase[n] by increment[n]
                       // Load phase into r0:r1
-                      "lds r0, phase+%[n]\n\t"
-                      "lds r1, phase+%[n]+1\n\t"
+                      "lds r0, phase+2*%[n]+1\n\t"
+                      "lds r1, phase+2*%[n]\n\t"
                       // Load increment into r31:r30, note the
                       // reversed order of high/low byte. This is so
                       // we get the high byte into the low byte of Z
                       // for later.
-                      "lds r31, increment+%[n]\n\t"
-                      "lds r30, increment+%[n]+1\n\t"
+                      "lds r30, increment+2*%[n]+1\n\t"
+                      "lds r31, increment+2*%[n]\n\t"
                       // Add them into r0:r1
-                      "add r30, r1\n\t"
-                      "adc r31, r0\n\t"
+                      "add r31, r1\n\t"
+                      "adc r30, r0\n\t"
                       // Save them back into phase[n]
-                      "sts phase+%[n], r31\n\t"
-                      "sts phase+%[n]+1, r30\n\t"
+                      "sts phase+2*%[n], r31\n\t"
+                      "sts phase+2*%[n]+1, r30\n\t"
 
 #if VOLUME_TRANSITION == 1
                       // No overflow: 4 cycles
@@ -126,17 +124,12 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
                       // Add the offset of the wav table to the high
                       // byte of the phase, which is now in the low
                       // byte of Z, r30.
-                      //
-                      // First overwrite r31 with the new high byte of
-                      // the address.
-                      "ldi r31, hi8(wav)\n\t"
-                      // Then add the low byte
+                      "ldi r31, 0\n\t"
                       "subi r30, lo8(-(wav))\n\t"
-                      // Add carry
-                      "sbci r31, 0\n\t"
+                      "sbci r31, hi8(-(wav))\n\t"
                       // Load wav[phase[n].b[1]] into r23
                       "ld r23, Z\n\t"
-
+                      // "sts 0xC6, r23\n\t"
                       // Signed/unsigned multiply into r0:r1. This
                       // multiplies the wave form with the volume.
                       "mulsu r23, r22\n\t"
@@ -209,7 +202,13 @@ static void nco_init(void) {
         increments[i] = (1UL<<(sizeof(PhaseType)*8-1)) / (F_OSC * 0.5 / 256.) * 4186.0*4 * pow(2., i/12.) * 440./437.;
     }
 
-    for(i = 0; i < N_OSC; i++) { tone[i] = age[i] = vel_bak[i] = 255; }
+    for(i = 0; i < N_OSC; i++) {
+        tone[i] = age[i] = 255;
+        vel[i] = 0;
+#if VOLUME_TRANSITION || VOLUME_WAIT_NEW_PHASE
+        vel_bak[i] = 0;
+#endif
+    }
     for(i = 0; i < 128/8; i++) { enabled_tones[i] = 0; }
 }
 
@@ -220,7 +219,7 @@ static void set_tone(uint8_t oscillator, uint8_t key, uint8_t velocity) {
     increment[oscillator] = increments[key%12] >> (HIGHEST_OCTAVE+1-key/12);
     tone[oscillator] = key;
     age[oscillator] = 0;
-    vel[oscillator] = 128 + ((velocity / 2) + (velocity & 1));
+    vel[oscillator] = velocity;
     enabled_tones[key >> 3] |= (1 << (key & 0x07));
 }
 
@@ -230,9 +229,6 @@ static void start_tone(uint8_t key, uint8_t velocity) {
     if(enabled_tones[key >> 3] & (1 << (key & 0x07))) {
         for(i = N_OSC; i--; ) {
             if(tone[i] == key) {
-                tx('a');
-                tx('0' + i);
-                tx('\n');
                 set_tone(i, key, velocity);
                 break;
             }
@@ -242,9 +238,6 @@ static void start_tone(uint8_t key, uint8_t velocity) {
     if(num_tones < N_OSC) {
         for(i = N_OSC; i--; ) {
             if(age[i] == 255) {
-                tx('a');
-                tx('0' + i);
-                tx('\n');
                 set_tone(i, key, velocity);
                 num_tones++;
                 break;
@@ -266,9 +259,6 @@ static void start_tone(uint8_t key, uint8_t velocity) {
             }
             age[i]++;
         }
-        tx('a');
-        tx('0' + max_i);
-        tx('\n');
         set_tone(max_i, key, velocity);
     }
 }
@@ -277,9 +267,6 @@ static void stop_tone(uint8_t key, uint8_t velocity) {
     uint8_t i;
     for(i = N_OSC; i--; ) {
         if(tone[i] == key) {
-            tx('o');
-            tx('0' + i);
-            tx('\n');
             enabled_tones[key >> 3] &= ~(1 << (key & 0x07));
             tone[i] = 255;
             age[i] = 255;
@@ -288,7 +275,6 @@ static void stop_tone(uint8_t key, uint8_t velocity) {
             return;
         }
     }
-    tx_s("    ");
 }
 
 
