@@ -50,27 +50,29 @@ void tx_s(char const *s) {
     }
 }
 
+__attribute__((always_inline))
+static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
+        phase[n].i += increment[n];
+        // skip the next if if carry is not set, i.e. we're not near a zeroed phase yet
+        __asm__ volatile goto ("brcc %I0 \n" : /* No outputs */ : /* No inputs */ : /* No clobbers */ : assign);
+        if(VOLUME_TRANSITION && vel_bak[n] < vel[n]) {
+                vel_bak[n]++;
+        } else if(VOLUME_TRANSITION && vel_bak[n] > vel[n]) {
+                vel_bak[n]--;
+        } else {
+                vel_bak[n] = vel[n];
+        }
+assign:
+        *reg = 0x80 ^ ((vel_bak[n] * wav[phase[n].b[sizeof(PhaseType)-1]]) >> 8);\
+}
 ISR(TIMER2_OVF_vect) {
     PORTD |= (1<<2);
-#define DO_OSC(n, reg) do { if(N_OSC > n) {\
-        phase[n].i += increment[n];\
-        if(SREG & 1) {\
-                if(VOLUME_TRANSITION && vel_bak[n] < vel[n]) {\
-                        vel_bak[n]++;\
-                } else if(VOLUME_TRANSITION && vel_bak[n] > vel[n]) {\
-                        vel_bak[n]--;\
-                } else {\
-                        vel_bak[n] = vel[n];\
-                }\
-        }\
-        reg = 0x80 ^ ((vel_bak[n] * wav[phase[n].b[sizeof(PhaseType)-1]]) >> 8);\
-} } while(0)
-    DO_OSC(0, OCR2A);
-    DO_OSC(1, OCR2B);
-    DO_OSC(2, OCR1B);
-    DO_OSC(3, OCR1A);
-    DO_OSC(4, OCR0B);
-    DO_OSC(5, OCR0B);
+    if(N_OSC > 0) do_osc(0, &OCR2A);
+    if(N_OSC > 1) do_osc(1, &OCR2B);
+    if(N_OSC > 2) do_osc(2, &OCR1BL);
+    if(N_OSC > 3) do_osc(3, &OCR1AL);
+    if(N_OSC > 4) do_osc(4, &OCR0B);
+    if(N_OSC > 5) do_osc(5, &OCR0B);
     PORTD &= ~(1<<2);
 }
 static void set_tone(uint8_t oscillator, uint8_t key, uint8_t velocity) {
