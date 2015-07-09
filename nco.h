@@ -5,6 +5,8 @@
 #include "config.h"
 #include "uart.h"
 
+typedef uint16_t PhaseType;
+
 int8_t wav[N_SAMP];
 PhaseType increment[N_OSC];
 union {
@@ -40,63 +42,42 @@ ISR(TIMER2_OVF_vect) {
 
 __attribute__((always_inline))
 static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
-    __asm__ volatile goto (// Increment phase[n] by increment[n]
-                           "lds r25, phase+%[n]\n\t"
-                           "lds r24, phase+%[n]+1\n\t"
-                           "lds r31, increment+%[n]\n\t"
-                           "lds r30, increment+%[n]+1\n\t"
-                           "add r31, r25\n\t"
-                           "adc r30, r24\n\t"
-                           "sts phase+%[n], r31\n\t"
-                           "sts phase+%[n]+1, r30\n\t"
-                           // skip the next if if carry is not set,
-                           // i.e. we're not near a zeroed phase yet
-                           // using this instead of if(SREG&1) { ... }
-                           // saves us /two/ whole cycles per channel
-                           // and interrupt call!
-                           "brcc %x1"
-                           :
-                           : [n] "I" (n)
-                           : "r30", "r31", "r24", "r25"
-                           : assign);
-    if(VOLUME_TRANSITION) {
-        /* This is equivalent to the following asm code:
-        if(vel_bak[n] < vel[n]) {
-            vel_bak[n]++;
-        } else if(vel_bak[n] > vel[n]) {
-            vel_bak[n]--;
-        }
-        */
-        __asm__ volatile ("      lds r20, vel_bak+%[n] \n\t"
-                          "      lds r21, vel+%[n] \n\t"
-                          "      cp r20, r21 \n\t"
-                          "      breq eq%= \n\t"
-                          "ne%=: brlo lt%= \n\t"
-                          "gt%=: dec r20 \n\t"
-                          "      sts vel_bak+%[n], r20\n\t"
-                          "      rjmp eq%= \n\t"
-                          "lt%=: inc r20 \n\t"
-                          "      sts vel_bak+%[n], r20 \n\t"
-                          "eq%=: "
-                          : 
-                          : [n] "I" (n)
-                          : "r20", "r21"
-                          );
-    } else if(VOLUME_WAIT_NEW_PHASE) {
-        __asm__ volatile ("lds r20, vel+%[n]\n\t"
-                          "sts vel_bak+%[n], r20"
-                          :
-                          : [n] "I" (n)
-                          : "r20"
-                          );
-    } else {
-        __asm__ volatile ("lds r20, vel+%[n]" : : [n] "I" (n) : "r20");
-    }
- assign:
-    // assumptions:
-    // - r20 contains the volume multiplier
-    // - r30 contains the high byte of the phase
-    __asm__ volatile ("ldi r31, hi8(wav)\n\t"
+    __asm__ volatile (// Increment phase[n] by increment[n]
+                      "lds r20, phase+%[n]\n\t"
+                      "lds r19, phase+%[n]+1\n\t"
+                      "lds r31, increment+%[n]\n\t"
+                      "lds r30, increment+%[n]+1\n\t"
+                      "add r31, r20\n\t"
+                      "adc r30, r19\n\t"
+                      "sts phase+%[n], r31\n\t"
+                      "sts phase+%[n]+1, r30\n\t"
+#if VOLUME_TRANSITION == 1
+                      // skip the next if if carry is not set,
+                      // i.e. we're not near a zeroed phase yet
+                      // using this instead of if(SREG&1) { ... }
+                      // saves us /two/ whole cycles per channel
+                      // and interrupt call!
+                      "brcc assign%=\n\t"
+                      "      lds r20, vel_bak+%[n] \n\t"
+                      "      lds r31, vel+%[n] \n\t"
+                      "      cp r20, r31 \n\t"
+                      "      breq eq%= \n\t"
+                      "ne%=: brlo lt%= \n\t"
+                      "gt%=: dec r20 \n\t"
+                      "      sts vel_bak+%[n], r20\n\t"
+                      "      rjmp eq%= \n\t"
+                      "lt%=: inc r20 \n\t"
+                      "      sts vel_bak+%[n], r20 \n\t"
+                      "eq%=: \n\t"
+#elif VOLUME_WAIT_NEW_PHASE == 1
+                      "brcc assign%=\n\t" // see above
+                      "lds r20, vel+%[n]\n\t"
+                      "sts vel_bak+%[n]\n\t, r20"
+#else
+                      "lds r20, vel+%[n]\n\t"
+#endif
+                      "assign%=:\n\t"
+                      "ldi r31, hi8(wav)\n\t"
                       "subi r30, lo8(-(wav))\n\t"
                       "sbci r31, 0\n\t" // r30 = wav + phase[n].b[sizeof(PhaseType)-1]
                       "ld r19, Z\n\t"      // r19 = (r30)
@@ -104,10 +85,11 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
                       "ldi r19, -128\n\t"
                       "eor r1, r19\n\t"    // bias by 128 to change signed to unsigned
                       "sts %[pwm], r1"     // write PWM value
-                      : 
-                      : [pwm] "i" (reg),
+                      :
+                      : [n] "I" (n),
+                        [pwm] "i" (reg),
                         [sizem] "I" (sizeof(PhaseType)-1)
-                      : "r0", "r1", "r19", "r30", "r31");
+                      : "r0", "r1", "r19", "r20", "r30", "r31" );
 }
 
 static void nco_init(void) {
