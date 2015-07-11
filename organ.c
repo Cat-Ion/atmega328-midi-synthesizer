@@ -52,7 +52,6 @@ int main(void) {
     uart_init(38400);
     nco_init();
     sei();
-    uint8_t i = 0;
     while(1) {
         handle_midi();
     }
