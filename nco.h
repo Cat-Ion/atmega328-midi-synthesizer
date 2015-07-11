@@ -9,6 +9,9 @@ typedef uint16_t PhaseType;
 #define HIGHEST_OCTAVE 10
 
 int8_t wav[N_SAMP];
+#if OCTAVE_LOOKUP_TABLE == 1
+uint8_t octave_lut[(HIGHEST_OCTAVE+1)*12];
+#endif
 PhaseType increment[N_OSC];
 union {
     PhaseType i;
@@ -211,13 +214,27 @@ static void nco_init(void) {
 #endif
     }
     for(i = 0; i < 128/8; i++) { enabled_tones[i] = 0; }
+
+#if OCTAVE_LOOKUP_TABLE == 1
+    i = 0;
+    for(uint8_t octave = 0; octave <= HIGHEST_OCTAVE; octave++) {
+        for(uint8_t halftone = 0; halftone < 12; halftone++, i++) {
+            octave_lut[i] = (((HIGHEST_OCTAVE+1-octave)) << 4) + halftone;
+        }
+    }
+#endif
 }
 
 static void set_tone(uint8_t oscillator, uint8_t key, uint8_t velocity) {
     if(tone[oscillator] != 255) {
         enabled_tones[tone[oscillator] >> 3] &= ~(1 << (tone[oscillator] & 0x07));
     }
+#if OCTAVE_LOOKUP_TABLE == 1
+    uint8_t octave = octave_lut[key];
+    increment[oscillator] = increments[octave & 0xF] >> (octave>>4);
+#else
     increment[oscillator] = increments[key%12] >> (HIGHEST_OCTAVE+1-key/12);
+#endif
     tone[oscillator] = key;
     age[oscillator] = 0;
     vel[oscillator] = velocity;
