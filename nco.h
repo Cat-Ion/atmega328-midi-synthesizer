@@ -153,34 +153,34 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
 }
 
 static void nco_init(void) {
-    DDRD |= (1<<2);
+    DDRD       |= (1<<2);
     switch(N_OSC) {
     case 6:
-        DDRD |= (1<<6); // OC0A
+        DDRD   |= (1<<6); // OC0A
         TCCR0A |= (2 << COM0A0);
     case 5:
-        DDRD |= (1<<5); // OC0B
+        DDRD   |= (1<<5); // OC0B
         TCCR0A |= (2 << COM0B0);
         TCCR0A |= (3 << WGM00);
     case 4:
-        DDRB |= (1<<1); // OC1A
+        DDRB   |= (1<<1); // OC1A
         TCCR1A |= (2 << COM1A0);
     case 3:
-        DDRB |= (1<<2); // OC1B
+        DDRB   |= (1<<2); // OC1B
         TCCR1A |= (2 << COM1B0);
         TCCR1A |= (1 << WGM10);
         TCCR1B |= (1 << WGM12);
     case 2:
-        DDRB |= (1<<3); // OC2A
+        DDRB   |= (1<<3); // OC2A
         TCCR2A |= (2<<COM2B0);
     case 1:
-        DDRD |= (1<<3); // OC2B
+        DDRD   |= (1<<3); // OC2B
         TCCR2A |= (2<<COM2A0);
         TCCR2A |= (3<<WGM20);
     default:
         break;
     }
-    DDRB |= (1<<3);
+    DDRB       |= (1<<3);
 
     if(N_OSC >= 1) {
         TCCR2B |= (1 << CS20);
@@ -213,6 +213,7 @@ static void nco_init(void) {
         vel_bak[i] = 0;
 #endif
     }
+    
     for(i = 0; i < 128/8; i++) { enabled_tones[i] = 0; }
 
 #if OCTAVE_LOOKUP_TABLE == 1
