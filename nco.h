@@ -216,11 +216,13 @@ static void set_tone(uint8_t oscillator, uint8_t key, uint8_t velocity) {
     if(tone[oscillator] != 255) {
         enabled_tones[tone[oscillator] >> 3] &= ~(1 << (tone[oscillator] & 0x07));
     }
-    increment[oscillator] = increments[key%12] >> (HIGHEST_OCTAVE+1-key/12);
-    tone[oscillator] = key;
-    age[oscillator] = 0;
-    vel[oscillator] = velocity;
     enabled_tones[key >> 3] |= (1 << (key & 0x07));
+    if(tone[oscillator] != key) {
+        tone[oscillator] = key;
+        increment[oscillator] = increments[key%12] >> (HIGHEST_OCTAVE+1-key/12);
+        age[oscillator] = 0;
+    }
+    vel[oscillator] = velocity<<1;
 }
 
 __attribute__((optimize("unroll-loops")))
