@@ -226,7 +226,7 @@ static void nco_init(void) {
 #endif
 }
 
-static void set_tone(uint8_t oscillator, uint8_t key, uint8_t velocity) {
+static inline void set_tone(uint8_t oscillator, uint8_t key, uint8_t velocity) {
     if(tone[oscillator] != 255) {
         enabled_tones[tone[oscillator] >> 3] &= ~(1 << (tone[oscillator] & 0x07));
     }
