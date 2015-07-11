@@ -253,15 +253,27 @@ static void start_tone(uint8_t key, uint8_t velocity) {
         }
     } else {
         uint8_t max_i = N_OSC-1, max_age = age[N_OSC-1];
+        uint8_t quiet_i = N_OSC-1, quiet = vel[N_OSC-1], loud = vel[N_OSC-1];
         age[N_OSC-1]++;
         for(i = N_OSC-1; i--; ) {
             if(age[i] > max_age) {
                 max_age = age[i];
                 max_i = i;
             }
+            if(quiet > vel[i] || (quiet == vel[i] && age[i] > age[quiet_i])) {
+                quiet = vel[i];
+                quiet_i = i;
+            }
+            if(loud < vel[i]) {
+                loud = vel[i];
+            }
             age[i]++;
         }
-        set_tone(max_i, key, velocity);
+        if((loud - quiet) > 40) {
+            set_tone(quiet_i, key, velocity);
+        } else {
+            set_tone(max_i, key, velocity);
+        }
     }
 }
 __attribute__((optimize("unroll-loops")))
