@@ -35,14 +35,14 @@ static void handle_midi(void) {
     
     switch(command) {
     case 0:
-        p1 = rx();
-        p2 = rx();
-        stop_tone(p1, p2);
-        break;
     case 1:
         p1 = rx();
         p2 = rx();
-        start_tone(p1, p2);
+        if(p2 != 0 && command != 0) {
+            start_tone(p1, p2);
+        } else {
+            stop_tone(p1, p2);
+        }
         break;
     default:
         break;
