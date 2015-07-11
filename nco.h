@@ -139,7 +139,7 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
                       "mulsu r23, r22\n\t"
                       // The result is signed, so flip the high bit to
                       // add 128 to the high byte (r1, the only one we
-                      // need) and bias it to a signed value.
+                      // need) and bias it to an unsigned value.
                       "ldi r30, -128\n\t"
                       "eor r1, r30\n\t"
                       // Finally, write the PWM register
