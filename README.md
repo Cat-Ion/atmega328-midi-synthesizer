@@ -11,7 +11,9 @@ adjustments when the volume changes.
 The interrupt routine that handles most of the heavy lifting is written with
 inline asm to enable using six channels, and even then it might not be fast
 enough if all six are running at rather high frequencies, so this is an
-interesting project to learn about optimizations ;)
+interesting project to learn about optimizations. Tests have shown that usually
+about 90% of the processing power is spent on the interrupt, but with
+occasional peaks, depending on the song, going up to 95%. :)
 
 Contributing
 ======
