@@ -46,7 +46,7 @@ ISR(TIMER2_OVF_vect) {
     if(N_OSC > 1) do_osc(1, &OCR2B);
     if(N_OSC > 2) do_osc(2, &OCR1BL);
     if(N_OSC > 3) do_osc(3, &OCR1AL);
-    if(N_OSC > 4) do_osc(4, &OCR0B);
+    if(N_OSC > 4) do_osc(4, &OCR0A);
     if(N_OSC > 5) do_osc(5, &OCR0B);
 }
 
