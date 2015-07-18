@@ -52,6 +52,9 @@ ISR(TIMER2_OVF_vect) {
 
 __attribute__((always_inline))
 static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
+    // The following numbers are for 16-bit phases, for different
+    // sizes subtract 14 and add 7*sizeof(PhaseType).
+    //
     // With transitions enabled:
     // 
     // Worst case: 40 cycles (decreased volume, and a new phase)
