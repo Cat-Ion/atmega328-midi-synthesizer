@@ -67,24 +67,39 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
     //
     // Without any 'smart' volume handling, it'll always need 29
     // cycles.
-    __asm__ volatile (// The following section needs 14 cycles.
-                      // 
+    __asm__ volatile (// The following section needs 7 cycles per 8
+                      // bits of PhaseType
+#if sizeof(PhaseType) == 3
                       // Increment phase[n] by increment[n]
-                      // Load phase into r0:r1
-                      "lds r0, phase+2*%[n]+1\n\t"
-                      "lds r1, phase+2*%[n]\n\t"
-                      // Load increment into r31:r30, note the
-                      // reversed order of high/low byte. This is so
-                      // we get the high byte into the low byte of Z
-                      // for later.
-                      "lds r30, increment+2*%[n]+1\n\t"
-                      "lds r31, increment+2*%[n]\n\t"
-                      // Add them into r0:r1
-                      "add r31, r1\n\t"
+                      // Load phase into r0:r1:r22
+                      "lds r0, phase+3*%[n]+2\n\t"
+                      "lds r1, phase+3*%[n]+1\n\t"
+                      "lds r22, phase+3*%[n]+0\n\t"
+                      // Load increment into r30:r31:r23
+                      "lds r30, increment+3*%[n]+2\n\t"
+                      "lds r31, increment+3*%[n]+1\n\t"
+                      "lds r23, increment+3*%[n]+0\n\t"
+                      // Add them into r30:r31:r23
+                      "add r23, r22\n\t"
+                      "adc r31, r1\n\t"
                       "adc r30, r0\n\t"
                       // Save them back into phase[n]
+                      "sts phase+3*%[n]+2, r23\n\t"
+                      "sts phase+3*%[n]+1, r30\n\t"
+                      "sts phase+3*%[n]+0, r31\n\t"
+#elif sizeof(PhaseType) == 2
+                      "lds r0, phase+2*%[n]+1\n\t"
+                      "lds r1, phase+2*%[n]+0\n\t"
+                      "lds r30, increments+2*%[n]+1\n\t"
+                      "lds r31, increments+2*%[n]+0\n\t"
+                      "add r31, r1\n\t"
+                      "add r30, r0\n\t"
                       "sts phase+2*%[n], r31\n\t"
                       "sts phase+2*%[n]+1, r30\n\t"
+#else
+                      #error "Invalid size for PhaseType, change the size or implement this bit yourself."
+                      // And remember to adjust the clobber registers if you do.
+#endif
 
 #if VOLUME_TRANSITION == 1
                       // No overflow: 4 cycles
