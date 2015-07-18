@@ -71,36 +71,29 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
     // cycles.
     __asm__ volatile (// The following section needs 7 cycles per 8
                       // bits of PhaseType
-#if sizeof(PhaseType) == 3
-                      // Increment phase[n] by increment[n]
-                      // Load phase into r0:r1:r22
-                      "lds r0, phase+3*%[n]+2\n\t"
-                      "lds r1, phase+3*%[n]+1\n\t"
-                      "lds r22, phase+3*%[n]+0\n\t"
-                      // Load increment into r30:r31:r23
-                      "lds r30, increment+3*%[n]+2\n\t"
-                      "lds r31, increment+3*%[n]+1\n\t"
-                      "lds r23, increment+3*%[n]+0\n\t"
-                      // Add them into r30:r31:r23
-                      "add r23, r22\n\t"
-                      "adc r31, r1\n\t"
-                      "adc r30, r0\n\t"
-                      // Save them back into phase[n]
-                      "sts phase+3*%[n]+2, r23\n\t"
-                      "sts phase+3*%[n]+1, r30\n\t"
-                      "sts phase+3*%[n]+0, r31\n\t"
-#elif sizeof(PhaseType) == 2
-                      "lds r0, phase+2*%[n]+1\n\t"
-                      "lds r1, phase+2*%[n]+0\n\t"
-                      "lds r30, increments+2*%[n]+1\n\t"
-                      "lds r31, increments+2*%[n]+0\n\t"
-                      "add r31, r1\n\t"
+                      // Starting with the lowest byte, increase all
+                      // phase bytes.  First load the phase and
+                      // increment, then add them, then store the
+                      // phase back to RAM.
+                      "lds r0,  phase    +%[size]*%[n]+0\n\t"
+                      "lds r30, increment+%[size]*%[n]+0\n\t"
                       "add r30, r0\n\t"
-                      "sts phase+2*%[n], r31\n\t"
-                      "sts phase+2*%[n]+1, r30\n\t"
-#else
-                      #error "Invalid size for PhaseType, change the size or implement this bit yourself."
-                      // And remember to adjust the clobber registers if you do.
+                      "sts phase+%[size]*%[n]+0, r30\n\t"
+#if sizeof(PhaseType) >= 2
+                      "lds r0,  phase    +%[size]*%[n]+1\n\t"
+                      "lds r30, increment+%[size]*%[n]+1\n\t"
+                      "adc r30, r0\n\t"
+                      "sts phase+%[size]*%[n]+1, r30\n\t"
+#endif
+#if sizeof(PhaseType) >= 3
+                      "lds r0,  phase    +%[size]*%[n]+2\n\t"
+                      "lds r30, increment+%[size]*%[n]+2\n\t"
+                      "adc r30, r0\n\t"
+                      "sts phase+%[size]*%[n]+2, r30\n\t"
+#endif
+#if sizeof(PhaseType) >= 4
+    #error "Invalid size for PhaseType, change the size or implement this bit yourself. Do you really need more than 4mHz frequency resolution?"
+    // And remember to adjust the clobber registers if you do.
 #endif
 
 #if VOLUME_TRANSITION == 1
@@ -165,6 +158,7 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
                       : [n] "I" (n),
                         [pwm] "i" (reg),
                         [sizem] "I" (sizeof(PhaseType)-1),
+                        [size] "I" (sizeof(PhaseType)),
                         [sreg] "I" (_SFR_IO_ADDR(SREG))
                       : "r0", "r1", "r22", "r23", "r30", "r31" );
 }
