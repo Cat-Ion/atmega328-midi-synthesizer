@@ -5,7 +5,6 @@
 #include "config.h"
 #include "uart.h"
 
-typedef uint16_t PhaseType;
 #define HIGHEST_OCTAVE 10
 
 int8_t wav[N_SAMP];
