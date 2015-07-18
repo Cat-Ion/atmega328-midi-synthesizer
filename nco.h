@@ -157,7 +157,6 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
                       :
                       : [n] "I" (n),
                         [pwm] "i" (reg),
-                        [sizem] "I" (sizeof(PhaseType)-1),
                         [size] "I" (sizeof(PhaseType)),
                         [sreg] "I" (_SFR_IO_ADDR(SREG))
                       : "r0", "r1", "r22", "r23", "r30", "r31" );
