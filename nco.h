@@ -93,7 +93,6 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
 #endif
 #if sizeof(PhaseType) >= 4
     #error "Invalid size for PhaseType, change the size or implement this bit yourself. Do you really need more than 4mHz frequency resolution?"
-    // And remember to adjust the clobber registers if you do.
 #endif
 
 #if VOLUME_TRANSITION == 1
