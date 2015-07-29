@@ -79,19 +79,19 @@ static inline void do_osc(uint8_t n, volatile uint8_t *reg) {
                       "lds r30, increment+%[size]*%[n]+0\n\t"
                       "add r30, r0\n\t"
                       "sts phase+%[size]*%[n]+0, r30\n\t"
-#if sizeof(PhaseType) >= 2
+#if PHASETYPE_SIZE >= 2
                       "lds r0,  phase    +%[size]*%[n]+1\n\t"
                       "lds r30, increment+%[size]*%[n]+1\n\t"
                       "adc r30, r0\n\t"
                       "sts phase+%[size]*%[n]+1, r30\n\t"
 #endif
-#if sizeof(PhaseType) >= 3
+#if PHASETYPE_SIZE >= 3
                       "lds r0,  phase    +%[size]*%[n]+2\n\t"
                       "lds r30, increment+%[size]*%[n]+2\n\t"
                       "adc r30, r0\n\t"
                       "sts phase+%[size]*%[n]+2, r30\n\t"
 #endif
-#if sizeof(PhaseType) >= 4
+#if PHASETYPE_SIZE >= 4
     #error "Invalid size for PhaseType, change the size or implement this bit yourself. Do you really need more than 4mHz frequency resolution?"
 #endif
 
