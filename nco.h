@@ -7,6 +7,18 @@
 
 #define HIGHEST_OCTAVE 10
 
+#if PHASETYPE_SIZE == 1
+typedef uint8_t PhaseType;
+#elif PHASETYPE_SIZE == 2
+typedef uint16_t PhaseType;
+#elif PHASETYPE_SIZE == 3
+typedef __uint24 PhaseType;
+#elif PHASETYPE_SIZE == 4
+typedef uint32_t PhaseType;
+#else
+#error "Invalid PHASETYPE_SIZE"
+#endif
+
 int8_t wav[N_SAMP];
 #if OCTAVE_LOOKUP_TABLE == 1
 uint8_t octave_lut[(HIGHEST_OCTAVE+1)*12];

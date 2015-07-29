@@ -1,12 +1,9 @@
 #ifndef _CONFIG_H
 #define _CONFIG_H
 #define OCTAVE_LOOKUP_TABLE 1
-typedef uint16_t PhaseType; // uint16_t or __uint24 are
-                            // implemented. You cannot use 24-bit
-                            // phases with six oscillators and any
-                            // volume flags.
-#define PHASETYPE_SIZE 2    // Can't use sizeof in preprocessor
-                            // directives, so...
+#define PHASETYPE_SIZE 2    // 1, 2, 3 are implemented. 3 bytes are
+                            // too slow with six oscillators and
+                            // any volume flags.
 #define N_OSC 6
 #define N_SAMP 256
 #define VOLUME_TRANSITION 1 /* If non-zero, volume changes by at most
